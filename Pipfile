@@ -13,3 +13,5 @@ check-manifest = "*"
 [packages]
 worek = {editable = true, path = "."}
 sqlalchemy = "*"
+click = "*"
+"psycopg2-binary" = "*"

@@ -1,4 +1,4 @@
-PostgreSQL Locks (PLocks)
+Worek - A Database Backup Tool
 #########################
 
 .. image:: https://circleci.com/gh/level12/worek.svg?style=shield

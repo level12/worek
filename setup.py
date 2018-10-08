@@ -32,5 +32,11 @@ setup(
     include_package_data=True,
     install_requires=[
         'sqlalchemy',
-    ]
+        'click',
+        'psycopg2-binary',
+    ],
+    entry_points='''
+        [console_scripts]
+        worek=worek.cli:cli
+    '''
 )

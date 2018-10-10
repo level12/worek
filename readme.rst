@@ -1,5 +1,5 @@
 Worek - A Database Backup Tool
-#########################
+##############################
 
 .. image:: https://circleci.com/gh/level12/worek.svg?style=shield
     :target: https://circleci.com/gh/level12/worek

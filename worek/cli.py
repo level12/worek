@@ -7,14 +7,15 @@ def cli():
     pass
 
 
-@cli.command()
-@click.option('-h', '--host', default=None)
-@click.option('-p', '--port', default=None)
-@click.option('-u', '--user', default=None)
-@click.option('-d', '--dbname', default=None)
-@click.option('-e', '--engine', default='postgres')
-@click.option('-s', '--schema', multiple=True)
-@click.option('-f', '--file', 'output_file', default=None, type=click.File(mode='w'))
+@cli.command(help="Create a database backup")
+@click.option('-h', '--host', default=None, help="connection hostname for server")
+@click.option('-p', '--port', default=None, help="connection port for server")
+@click.option('-u', '--user', default=None, help="connection username for server")
+@click.option('-d', '--dbname', default=None, help="database to backup")
+@click.option('-e', '--engine', default='postgres', help="database type [postgres]")
+@click.option('-s', '--schema', multiple=True, help="schemas to backup up, can be used multiple times")
+@click.option('-f', '--file', 'output_file', default=None, type=click.File(mode='w'),
+              help="path to file backup location, otherwise pipe to STDOUT")
 def backup(host, port, user, dbname, engine, schema, output_file):
     file_name = output_file if output_file is not None else click.get_text_stream('stdout')
 
@@ -25,16 +26,17 @@ def backup(host, port, user, dbname, engine, schema, output_file):
         click.echo(str(e), err=True)
 
 
-@cli.command()
-@click.option('-h', '--host', default=None)
-@click.option('-p', '--port', default=None)
-@click.option('-u', '--user', default=None)
-@click.option('-d', '--dbname', default=None)
-@click.option('-e', '--engine', default='postgres')
-@click.option('-s', '--schema', multiple=True)
-@click.option('-f', '--file', 'restore_file', default=None, type=click.File(mode='r'))
+@cli.command(help="Restore a database backup")
+@click.option('-h', '--host', default=None, help="connection hostname for server")
+@click.option('-p', '--port', default=None, help="connection port for server")
+@click.option('-u', '--user', default=None, help="connection username for server")
+@click.option('-d', '--dbname', default=None, help="database to backup")
+@click.option('-e', '--engine', default='postgres', help="database type [postgres]")
+@click.option('-s', '--schema', multiple=True, help="schemas to backup up, can be used multiple times")
+@click.option('-f', '--file', 'restore_file', default=None, type=click.File(mode='rb'),
+              help="path to file backup location, otherwise the read from STDIN")
 def restore(host, port, user, dbname, engine, schema, restore_file):
-    file_name = restore_file if restore_file is not None else click.get_text_stream('stdin')
+    file_name = restore_file if restore_file is not None else click.get_binary_stream('stdin')
 
     core.restore(file_name, engine,
                  schema=schema, host=host, port=port, user=user, dbname=dbname)

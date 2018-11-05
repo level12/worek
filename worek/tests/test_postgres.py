@@ -43,8 +43,15 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
         assert engine.url.port == 1234
         assert engine.url.database == 'envdb'
 
-    def test_construct_engine_from_default(self):
-        engine = PG.construct_engine_from_params()
+    def test_construct_engine_from_default(self, monkeypatch):
+        with monkeypatch.context() as m:
+            m.delenv('PGUSER', raising=False)
+            m.delenv('PGPASSWORD', raising=False)
+            m.delenv('PGHOST', raising=False)
+            m.delenv('PGPORT', raising=False)
+            m.delenv('PGDATABASE', raising=False)
+
+            engine = PG.construct_engine_from_params()
 
         assert engine.url.drivername == 'postgresql'
         assert engine.url.username == getpass.getuser()
@@ -90,7 +97,9 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
 
         assert pg.get_function_list_from_db(pg_uniqueschema) == [('testfunc', 'integer')]
 
-    def test_get_function_list_from_db_does_not_include_extensions(self, pg_unclean_engine, pg_uniqueschema):
+    def test_get_function_list_from_db_does_not_include_extensions(
+            self, pg_unclean_engine, pg_uniqueschema):
+
         pg = PG(pg_unclean_engine)
 
         conn = pg_unclean_engine.connect()
@@ -168,8 +177,9 @@ class TestPostgresDialectBackup(PostgresDialectTestBase):
 
     def test_backup_creates_basic_sql_backup(self, tmpdir, pg_unclean_engine, pg_uniqueschema):
         pg = PG(pg_unclean_engine, schemas=[pg_uniqueschema])
+        backup_dir = tmpdir.join('/test.backup').strpath
 
-        with open(tmpdir + '/test.backup', mode='w+') as fp:
+        with open(backup_dir, mode='w+') as fp:
             pg.backup_text(fp)
             fp.seek(0)
             result = fp.read()
@@ -182,7 +192,7 @@ class TestPostgresDialectIntegration(PostgresDialectTestBase):
 
     def test_create_and_restore_database_text_backup(self, tmpdir, pg_clean_engine):
         pg = PG(pg_clean_engine)
-        backup_file = tmpdir + '/test.backup.text'
+        backup_file = tmpdir.join('test.backup.text').strpath
 
         self.create_table(pg_clean_engine, 'testtbl')
         pg_clean_engine.execute('INSERT INTO testtbl VALUES (1),(2),(3)')
@@ -209,7 +219,7 @@ class TestPostgresDialectIntegration(PostgresDialectTestBase):
 
     def test_create_and_restore_database_binary_backup(self, tmpdir, pg_clean_engine):
         pg = PG(pg_clean_engine)
-        backup_file = tmpdir + '/test.backup.bin'
+        backup_file = tmpdir.join('test.backup.bin').strpath
 
         self.create_table(pg_clean_engine, 'testtbl')
         pg_clean_engine.execute('INSERT INTO testtbl VALUES (1),(2),(3)')

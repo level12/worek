@@ -20,7 +20,7 @@ setup(
     author_email="nick.zaccardi@level12.io",
     url='https://github.com/level12/worek',
     classifiers=[
-        'Development Status :: 4 - Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: BSD License',
         'Operating System :: OS Independent',
@@ -35,6 +35,15 @@ setup(
         'click',
         'psycopg2-binary',
     ],
+    extras_require={
+        'ci': [
+            'pytest',
+            'pytest-cov',
+            'flake8',
+            'check-manifest',
+            'docutils',
+        ]
+    },
     entry_points='''
         [console_scripts]
         worek=worek.cli:cli

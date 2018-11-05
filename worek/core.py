@@ -1,5 +1,4 @@
 import worek.dialects.postgres as pgdialect
-import psycopg2
 
 
 class WorekOperationException(Exception):
@@ -36,6 +35,20 @@ def backup(backup_file, backup_type='full', **params):
 
 
 def restore(restore_file, **params):
+    """Restore a backup file to the specified database
+
+    :param restore_file: The file to pull the backup from, this can be any file-like object
+        including a a stream like. sys.stdin and sys.stdout should work no problem.
+
+    :param driver: the driver to use for connecting to the database
+    :param host: the host of the database server
+    :param port: the port of the database server
+    :param user: the user of the database server
+    :param password: the password of the database server
+    :param dbname: the database name to backup
+    :param saengine: an optional sqlalchemy engine, if this is passed, this will be used for the
+        backup and other connection type parameters (e.g. driver, host, port) will be ignored
+    """
     PG = pgdialect.Postgres(
         engine=params.get('saengine') or pgdialect.Postgres.construct_engine_from_params(**params),
         schemas=params.get('schemas'))

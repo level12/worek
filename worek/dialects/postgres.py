@@ -5,6 +5,7 @@ import os
 import subprocess
 
 import sqlalchemy as sa
+import psycopg2
 
 import worek.utils
 
@@ -12,22 +13,15 @@ import worek.utils
 log = logging.getLogger(__name__)
 
 
+class PostgresCLIError(Exception):
+    def __init__(self, command_result):
+        self.command_result = command_result
+
+
 class PostgresCommand(enum.Enum):
     BACKUP = 'pg_dump'
     RESTORE_BINARY = 'pg_restore'
     RESTORE_TEXT = 'psql'
-
-
-def restore(restore_file, engine, backup_type='full', bin_dpath=None, schemas=None,
-            clean_existing=True):
-
-    if clean_existing:
-        pg.clean_existing_database()
-
-    if backup_type == 'full':
-        pg.restore_binary(restore_file)
-    else:
-        raise NotImplementedError('Unknown Backup Type.')
 
 
 class Postgres:
@@ -93,7 +87,15 @@ class Postgres:
         port = params.get('port') or os.environ.get('PGPORT', 5432)
         dbname = params.get('dbname') or os.environ.get('PGDATABASE', user)
 
-        return sa.create_engine(f'postgresql://{user}:{password}@{host}:{port}/{dbname}')
+        return sa.create_engine(
+            'postgresql://{user}:{password}@{host}:{port}/{dbname}'.format(
+                user=user,
+                password=password,
+                host=host,
+                port=port,
+                dbname=dbname
+            )
+        )
 
     @classmethod
     def cli_flags_for_url(cls, url):
@@ -147,8 +149,8 @@ class Postgres:
         url = self.engine.url
 
         cli_args = (
-            ['{}/{}'.format(self.pg_bin_dpath, command.value)] +
-            self.cli_flags_for_url(url)
+            ['{}/{}'.format(self.pg_bin_dpath, command.value)]
+            + self.cli_flags_for_url(url)
         )
 
         if command != PostgresCommand.RESTORE_TEXT:
@@ -159,32 +161,37 @@ class Postgres:
 
         cli_args.extend(additional_args or [])
 
-        return self.executor(cli_args, env=env, stdin=stdin, stdout=stdout, stderr=stderr)
+        result = self.executor(cli_args, env=env, stdin=stdin, stdout=stdout, stderr=stderr)
+
+        if result.returncode != 0:
+            raise PostgresCLIError(result)
+
+        return result
 
     def drop_schema(self, schema):
         for funcname, funcargs in self.get_function_list_from_db(schema):
             try:
                 sql = 'DROP FUNCTION "{}"."{}" ({}) CASCADE'.format(schema, funcname, funcargs)
                 self.engine.execute(sql)
-            except Exception as e:
+            except Exception:
                 raise
 
         for table in self.get_table_list_from_db(schema):
             try:
                 self.engine.execute('DROP TABLE "{}"."{}" CASCADE'.format(schema, table))
-            except Exception as e:
+            except Exception:
                 raise
 
         for seq in self.get_seq_list_from_db(schema):
             try:
                 self.engine.execute('DROP SEQUENCE "{}"."{}" CASCADE'.format(schema, seq))
-            except Exception as e:
+            except Exception:
                 raise
 
         for dbtype in self.get_type_list_from_db(schema):
             try:
                 self.engine.execute('DROP TYPE "{}"."{}" CASCADE'.format(schema, dbtype))
-            except Exception as e:
+            except Exception:
                 raise
 
     def get_function_list_from_db(self, schema):
@@ -293,7 +300,7 @@ class Postgres:
         header = buf.read(5)
         buf.seek(0)
 
-        if header == b'PGDMP':
+        if header == 'PGDMP':
             return self.restore_binary(buf, **kwargs)
         else:
             return self.restore_text(buf, **kwargs)
@@ -311,9 +318,9 @@ class Postgres:
             (i.e. PIPE, file, DEVNULL)
         """
         command_args = (
-            [] +
-            (['--no-owner' if no_owner else '']) +
-            (['--no-privileges' if no_privileges else ''])
+            []
+            + (['--no-owner' if no_owner else ''])
+            + (['--no-privileges' if no_privileges else ''])
         )
         return self._execute_cli_command(PostgresCommand.RESTORE_BINARY, command_args, stdin=buf)
 
@@ -356,4 +363,3 @@ class Postgres:
 
         command_args = ['--format', 'plain']
         return self._execute_cli_command(PostgresCommand.BACKUP, command_args, stdout=buf)
-

@@ -1,1 +1,4 @@
 include *.rst *.ini *.txt *.cfg
+exclude .coveragerc
+prune .ci
+prune .circleci

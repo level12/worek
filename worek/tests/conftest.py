@@ -3,6 +3,7 @@ import string
 
 import sqlalchemy as sa
 import pytest
+from worek.dialects.postgres import Postgres as PG
 
 DBNAME = 'worek-tests'
 
@@ -20,13 +21,13 @@ def pg_unclean_engine():
     there. Try to use this fixture as often as possible since it is expensive to drop and create a
     clean database.
     """
-    engine = sa.create_engine('postgresql://localhost/{}'.format(DBNAME))
+    engine = PG.construct_engine_from_params(dbname=DBNAME)
 
     try:
         testconn = engine.connect()
         testconn.close()
     except sa.exc.OperationalError:
-        local_engine = clean_database()
+        clean_database()
 
     return engine
 
@@ -34,7 +35,8 @@ def pg_unclean_engine():
 @pytest.fixture(scope='function')
 def pg_clean_engine():
     clean_database()
-    return sa.create_engine('postgresql://localhost/{}'.format(DBNAME))
+    return PG.construct_engine_from_params(dbname=DBNAME)
+
 
 def clean_database():
     """Return a handle to the test database
@@ -47,7 +49,7 @@ def clean_database():
     try to only use this when absolutely necessary.
     """
 
-    admin_engine = sa.create_engine('postgresql://localhost/postgres')
+    admin_engine = PG.construct_engine_from_params(dbname='postgres')
     local_conn = admin_engine.connect()
 
     # This bumps us out of a transaction because a DROP/CREATE command can't run in a transaction
@@ -65,13 +67,12 @@ def clean_database():
     local_conn.execute('CREATE DATABASE "{}";'.format(DBNAME))
 
 
-
 @pytest.fixture(scope='function')
 def pg_uniqueschema(pg_unclean_engine):
     """Create and return the name of a unique schema, which will be cleaned up after the test
 
     """
-    schema_name = ''.join(random.choices(string.ascii_lowercase, k=20))
+    schema_name = ''.join(random.sample(string.ascii_lowercase, k=20))
 
     conn = pg_unclean_engine.connect()
     conn.execute('CREATE SCHEMA {}'.format(schema_name))

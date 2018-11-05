@@ -41,5 +41,3 @@ class PostgresDialectTestBase():
         with_schema = '.'.join([schema, type_]) if schema else type_
         sql = 'CREATE TYPE {};'.format(with_schema)
         conn.execute(sql)
-
-

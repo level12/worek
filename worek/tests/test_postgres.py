@@ -1,41 +1,15 @@
 import getpass
-
 import sqlalchemy as sa
-from worek.dialects.postgres import Postgres as PG, PostgresCommand
-
-from worek.tests.helpers import MockCLIExecutor
 
 
-class PostgresDialectTestBase():
-    def create_extension(self, conn, ext, schema=None):
-        schema = 'WITH SCHEMA "{}"'.format(schema) if schema else ''
-        sql = 'CREATE EXTENSION IF NOT EXISTS "{}" {}'.format(ext, schema)
-        conn.execute(sql)
-
-    def create_table(self, conn, table, schema=None):
-        with_schema = '.'.join([schema, table]) if schema else table
-        sql = 'CREATE TABLE {} ( id integer PRIMARY KEY );'.format(with_schema)
-        conn.execute(sql)
-
-    def create_sequence(self, conn, sequence, schema=None):
-        with_schema = '.'.join([schema, sequence]) if schema else sequence
-        sql = 'CREATE SEQUENCE {};'.format(with_schema)
-        conn.execute(sql)
-
-    def create_function(self, conn, function, schema=None):
-        with_schema = '.'.join([schema, function]) if schema else function
-        sql = (
-            '''
-            CREATE OR REPLACE FUNCTION {}(int) RETURNS int
-            AS $$ SELECT 1 $$ LANGUAGE SQL;
-            '''.format(with_schema)
-        )
-        conn.execute(sql)
-
-    def create_type(self, conn, type_, schema=None):
-        with_schema = '.'.join([schema, type_]) if schema else type_
-        sql = 'CREATE TYPE {};'.format(with_schema)
-        conn.execute(sql)
+from worek.dialects.postgres import (
+    Postgres as PG,
+    PostgresCommand
+)
+from worek.tests.helpers import (
+    MockCLIExecutor,
+    PostgresDialectTestBase,
+)
 
 
 class TestPostgresDialectInternals(PostgresDialectTestBase):

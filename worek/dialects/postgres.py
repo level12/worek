@@ -82,6 +82,11 @@ class Postgres:
             The Postgres commands will use the same URL params in the execution of the cli commands
         """
 
+        driver = params.get('driver') or 'postgresql'
+
+        if 'postgresql' not in driver:
+            raise ValueError('The database driver must be for postgresql, got {}.'.format(driver))
+
         user = params.get('user') or os.environ.get('PGUSER') or getpass.getuser()
         password = params.get('password') or os.environ.get('PGPASSWORD', '')
         host = params.get('host') or os.environ.get('PGHOST', 'localhost')

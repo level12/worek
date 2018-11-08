@@ -8,14 +8,23 @@ import sqlalchemy as sa
 import psycopg2
 
 import worek.utils
+from worek.exc import WorekException
 
 
 log = logging.getLogger(__name__)
 
 
-class PostgresCLIError(Exception):
+class WorekPostgresError(WorekException):
+    pass
+
+
+class PostgresCLIError(WorekPostgresError):
     def __init__(self, command_result):
         self.command_result = command_result
+
+
+class PostgresInputError(WorekPostgresError):
+    pass
 
 
 class PostgresCommand(enum.Enum):
@@ -297,10 +306,17 @@ class Postgres:
 
     def restore(self, buf, **kwargs):
         """Perform a "smart" restore, properly choosing between a binary or text version"""
-        header = buf.read(5)
-        buf.seek(0)
+        return self.restore_binary(buf, **kwargs)
 
-        if header == 'PGDMP':
+        try:
+            header = buf.peek(5)
+        except AttributeError:
+            raise PostgresInputError(
+                'You must use a peekable stream when trying to automatically detect the backup file'
+                ' type. If you are pipe data into worek from the CLI, you should explicitly set the'
+                ' backup file type that you are piping to the restore command.')
+
+        if header[:5] in ('PGDMP', b'PGDMP'):
             return self.restore_binary(buf, **kwargs)
         else:
             return self.restore_text(buf, **kwargs)

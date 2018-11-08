@@ -208,7 +208,7 @@ class TestPostgresDialectIntegration(PostgresDialectTestBase):
             if 'relation "testtbl" does not exist' not in str(e):
                 raise
 
-        with open(backup_file, mode='r') as fp:
+        with open(backup_file, mode='rb') as fp:
             command_result = pg.restore_text(fp)
 
         assert command_result.returncode == 0
@@ -235,8 +235,8 @@ class TestPostgresDialectIntegration(PostgresDialectTestBase):
             if 'relation "testtbl" does not exist' not in str(e):
                 raise
 
-        with open(backup_file, mode='r') as fp:
-            command_result = pg.restore_binary(fp)
+        with open(backup_file, mode='rb') as fp:
+            command_result = pg.restore(fp)
 
         assert command_result.returncode == 0
 

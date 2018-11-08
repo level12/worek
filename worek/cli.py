@@ -36,7 +36,16 @@ def backup(host, port, user, dbname, engine, schema, output_file):
               help="schemas to backup up, can be used multiple times")
 @click.option('-f', '--file', 'restore_file', default=None, type=click.File(mode='rb'),
               help="path to file backup location, otherwise the read from STDIN")
-def restore(host, port, user, dbname, engine, schema, restore_file):
+@click.option('-F', '--format', 'file_format', type=click.Choice(['c', 't']), default=None,
+              help="backup file format, ([c]ustom, [t]ext)")
+def restore(host, port, user, dbname, engine, schema, restore_file, file_format):
     file_name = restore_file if restore_file is not None else click.get_binary_stream('stdin')
 
-    core.restore(file_name, schema=schema, host=host, port=port, user=user, dbname=dbname)
+    if not restore_file and not file_format:
+        raise click.BadArgumentUsage(
+            'You must specify the file format (-F) when using a pipe to STDIN. We can not'
+            ' automatically determine the file format when using a pipe.',
+        )
+
+    core.restore(file_name, schema=schema, host=host, port=port, user=user, dbname=dbname,
+                 file_format=file_format)

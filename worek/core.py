@@ -1,7 +1,8 @@
 import worek.dialects.postgres as pgdialect
+from worek.exc import WorekException
 
 
-class WorekOperationException(Exception):
+class WorekOperationException(WorekException):
     pass
 
 
@@ -34,12 +35,15 @@ def backup(backup_file, backup_type='full', **params):
         raise NotImplementedError('Only full backups are available at this time.')
 
 
-def restore(restore_file, **params):
+def restore(restore_file, file_format=None, clean_existing_database=True, **params):
     """Restore a backup file to the specified database
 
     :param restore_file: The file to pull the backup from, this can be any file-like object
         including a a stream like. sys.stdin and sys.stdout should work no problem.
 
+    :param file_format: an optional file format. By default we try to be smart about this and detect
+        the type of file, but sometimes we can't and this allows hard setting it.
+    :param clean_existing_database: clean an existing database before restore
     :param driver: the driver to use for connecting to the database
     :param host: the host of the database server
     :param port: the port of the database server
@@ -56,7 +60,18 @@ def restore(restore_file, **params):
     if not PG.engine_can_connect:
         raise WorekOperationException('Can\'t connect to the database.')
 
-    PG.clean_existing_database()
+    if clean_existing_database:
+        PG.clean_existing_database()
 
     # perform the restore
-    return PG.restore(restore_file)
+    if file_format == 'c':
+        return PG.restore_binary(restore_file)
+    elif file_format == 't':
+        return PG.restore_text(restore_file)
+    elif file_format is None:
+        return PG.restore(restore_file)
+    else:
+        raise NotImplementedError(
+            'Got an unexpected file_format. {} is not a valid type, expecting'
+            ' "c", "t", or nothing.'.format(file_format)
+        )

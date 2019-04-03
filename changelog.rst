@@ -1,2 +1,1 @@
-Changelog
-=========
+Changelog\n=========\n

@@ -72,7 +72,7 @@ class Postgres:
         try:
             self.engine.execute("SELECT 1")
             return True
-        except psycopg2.Error:
+        except (psycopg2.Error, sa.exc.OperationalError):
             return False
 
     @classmethod

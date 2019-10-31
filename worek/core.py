@@ -27,7 +27,9 @@ def backup(backup_file, backup_type='full', **params):
         schemas=params.get('schemas'))
 
     if not PG.engine_can_connect:
-        raise WorekOperationException('Can\'t connect to the database.')
+        raise WorekOperationException(
+            "Can't connect to the database. Trying to connect to {}.".format(repr(PG.engine.url))
+        )
 
     if backup_type == 'full':
         PG.backup_binary(backup_file)
@@ -58,7 +60,9 @@ def restore(restore_file, file_format=None, clean_existing_database=True, **para
         schemas=params.get('schemas'))
 
     if not PG.engine_can_connect:
-        raise WorekOperationException('Can\'t connect to the database.')
+        raise WorekOperationException(
+            "Can't connect to the database. Trying to connect to {}.".format(repr(PG.engine.url))
+        )
 
     if clean_existing_database:
         PG.clean_existing_database()

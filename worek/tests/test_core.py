@@ -1,6 +1,9 @@
-import sqlalchemy as sa
-import worek
+import io
 
+import pytest
+import sqlalchemy as sa
+
+import worek
 from worek.tests.helpers import PostgresDialectTestBase
 
 
@@ -25,3 +28,17 @@ class TestCorePGBackup(PostgresDialectTestBase):
             pg_clean_engine.execute('SELECT * FROM should_be_removed;')
         except sa.exc.ProgrammingError as e:
             assert 'relation "should_be_removed" does not exist' in str(e)
+
+    def test_exception_with_no_database_backup(self):
+        with pytest.raises(worek.core.WorekOperationException) as e:
+            worek.core.backup('back.txt', host="ahostthatdoesntexist")
+
+        assert "Can't connect to the database. Trying to connect to " in str(e.value)
+
+
+class TestCorePGRestore(PostgresDialectTestBase):
+    def test_exception_with_no_database_restore(self,):
+        with pytest.raises(worek.core.WorekOperationException) as e:
+            worek.core.restore(io.StringIO('test'), host="ahostthatdoesntexist")
+
+        assert "Can't connect to the database. Trying to connect to " in str(e.value)

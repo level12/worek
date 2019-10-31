@@ -47,5 +47,15 @@ def restore(host, port, user, dbname, engine, schema, restore_file, file_format)
             ' automatically determine the file format when using a pipe.',
         )
 
-    core.restore(file_name, schema=schema, host=host, port=port, user=user, dbname=dbname,
-                 file_format=file_format)
+    try:
+        core.restore(
+            file_name,
+            schema=schema,
+            host=host,
+            port=port,
+            user=user,
+            dbname=dbname,
+            file_format=file_format,
+        )
+    except core.WorekOperationException as e:
+        click.echo(str(e), err=True)

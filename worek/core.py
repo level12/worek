@@ -21,10 +21,13 @@ def backup(backup_file, backup_type='full', **params):
     :param dbname: the database name to backup
     :param saengine: an optional sqlalchemy engine, if this is passed, this will be used for the
         backup and other connection type parameters (e.g. driver, host, port) will be ignored
+    :param version: version of PG client executables to use
     """
     PG = pgdialect.Postgres(
         engine=params.get('saengine') or pgdialect.Postgres.construct_engine_from_params(**params),
-        schemas=params.get('schemas'))
+        schemas=params.get('schemas'),
+        version=params.get('version'),
+    )
 
     if not PG.engine_can_connect:
         raise WorekOperationException('Can\'t connect to the database.')
@@ -52,10 +55,13 @@ def restore(restore_file, file_format=None, clean_existing_database=True, **para
     :param dbname: the database name to backup
     :param saengine: an optional sqlalchemy engine, if this is passed, this will be used for the
         backup and other connection type parameters (e.g. driver, host, port) will be ignored
+    :param version: version of PG client executables to use
     """
     PG = pgdialect.Postgres(
         engine=params.get('saengine') or pgdialect.Postgres.construct_engine_from_params(**params),
-        schemas=params.get('schemas'))
+        schemas=params.get('schemas'),
+        version=params.get('version'),
+    )
 
     if not PG.engine_can_connect:
         raise WorekOperationException('Can\'t connect to the database.')

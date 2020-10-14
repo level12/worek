@@ -53,4 +53,14 @@ Supports standard `PG environment variables`
   $ PGPORT=5432 worek backup -d database_name -f ./backup.bin
 
 
+Worek makes use of Postgres client utilities internally to create/restore backups.
+If multiple versions of the utilities are present, by default Worek will attempt to match the
+version of the utilities to the database server version. You may also specify a particular version
+of the client utilities to use via the `--version` or `-v` option. This feature requires
+`pg_wrapper` to be installed on the system.
+
+.. code::
+
+  $ worek backup -d database_name -f ./backup.bin -v 11
+
 .. _PG environment variables: https://www.postgresql.org/docs/current/libpq-envars.html

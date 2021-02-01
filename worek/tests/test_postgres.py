@@ -1,10 +1,14 @@
 import getpass
+import os
+from unittest import mock
+
+import pytest
 import sqlalchemy as sa
 
 
 from worek.dialects.postgres import (
     Postgres as PG,
-    PostgresCommand
+    PostgresCommand,
 )
 from worek.tests.helpers import (
     MockCLIExecutor,
@@ -143,10 +147,10 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
     def test_url_translation_to_cli_commands_with_schemas(self):
         executor = MockCLIExecutor()
         engine = sa.create_engine('postgresql://user:password@host:1111/dbname')
-        pg = PG(engine, executor=executor, schemas=['public', 'other'])
+        pg = PG(engine, executor=executor, schemas=['public', 'other'], version='10')
         pg._execute_cli_command(PostgresCommand.BACKUP)
 
-        assert executor.captured_args[0][0].endswith('/pg_dump')
+        assert executor.captured_args[0][0].endswith('pg_dump')
         assert set(executor.captured_args[0][1:]) == {
             '--dbname=dbname',
             '--host=host',
@@ -156,14 +160,15 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
             '--port=1111',
         }
         assert executor.captured_kwargs['env']['PGPASSWORD'] == 'password'
+        assert executor.captured_kwargs['env']['PGCLUSTER'] == '10/localhost:'
 
     def test_command_doesnt_use_schema_for_text_restore(self):
         executor = MockCLIExecutor()
         engine = sa.create_engine('postgresql://user:password@host:1111/dbname')
-        pg = PG(engine, executor=executor, schemas=['public', 'other'])
+        pg = PG(engine, executor=executor, schemas=['public', 'other'], version='10')
         pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
 
-        assert executor.captured_args[0][0].endswith('/psql')
+        assert executor.captured_args[0][0].endswith('psql')
         assert set(executor.captured_args[0][1:]) == {
             '--dbname=dbname',
             '--host=host',
@@ -171,6 +176,55 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
             '--port=1111',
         }
         assert executor.captured_kwargs['env']['PGPASSWORD'] == 'password'
+        assert executor.captured_kwargs['env']['PGCLUSTER'] == '10/localhost:'
+
+    @pytest.mark.skipif(not os.environ.get('PGVERSION'),
+                        reason='Must set PGVERSION to server version')
+    def test_command_uses_correct_exe_version(self, pg_unclean_engine):
+        executor = MockCLIExecutor()
+        expected_version = os.environ.get('PGVERSION')
+
+        # Default
+        pg = PG(pg_unclean_engine, executor=executor, schemas=['public', 'other'])
+        pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
+        assert executor.captured_kwargs['env']['PGCLUSTER'] == '{}/localhost:'.format(
+            expected_version)
+
+        # Explicit version
+        pg = PG(pg_unclean_engine, executor=executor, schemas=['public', 'other'], version='11')
+        pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
+        assert executor.captured_kwargs['env']['PGCLUSTER'] == '11/localhost:'
+
+        pg = PG(pg_unclean_engine, executor=executor, schemas=['public', 'other'], version='10')
+        pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
+        assert executor.captured_kwargs['env']['PGCLUSTER'] == '10/localhost:'
+
+        pg = PG(pg_unclean_engine, executor=executor, schemas=['public', 'other'], version='9')
+        pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
+        assert executor.captured_kwargs['env']['PGCLUSTER'] == '9/localhost:'
+
+    def test_command_pg_wrapper_not_installed(self):
+        executor = MockCLIExecutor()
+        engine = sa.create_engine('postgresql://user:password@host:1111/dbname')
+        pg = PG(engine, executor=executor, schemas=['public', 'other'], version='10')
+
+        with mock.patch('shutil.which') as m_which:
+            m_which.return_value = None
+            with pytest.raises(OSError, match='pg_wrapper is required if a version is specified'):
+                pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
+            m_which.assert_called_once_with('psql')
+
+        with mock.patch('os.path.islink') as m_is_link:
+            m_is_link.return_value = False
+            with pytest.raises(OSError, match='pg_wrapper is required if a version is specified'):
+                pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
+            m_is_link.assert_called_once_with('/usr/bin/psql')
+
+        with mock.patch('os.path.realpath') as m_real_path:
+            m_real_path.return_value = '/foo/bar'
+            with pytest.raises(OSError, match='pg_wrapper is required if a version is specified'):
+                pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
+            m_real_path.assert_called_once_with('/usr/bin/psql')
 
 
 class TestPostgresDialectBackup(PostgresDialectTestBase):

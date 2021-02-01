@@ -2,12 +2,13 @@ import enum
 import getpass
 import logging
 import os
+import re
+import shutil
 import subprocess
 
 import sqlalchemy as sa
 import psycopg2
 
-import worek.utils
 from worek.exc import WorekException
 
 
@@ -40,7 +41,7 @@ class Postgres:
     manage backups and restores of their own data.
     """
 
-    def __init__(self, engine, schemas=None, executor=None):
+    def __init__(self, engine, schemas=None, executor=None, version=None):
         """Postgres Database Management Tool
 
         :param engine: a SQLAlchemy Engine which connects to the relevant database
@@ -48,6 +49,7 @@ class Postgres:
         :param executor: the method for executing the PG commands against the database. By default
             this uses `subprocess.run` but you can use the `tests.helpers.MockCLIExecutor` or any
             callable that accepts a list of CLI arguments and `**kwargs`.
+        :param version: the version of PG client executables to use
 
         .. note:: `schemas` is ignored when working with a RESTORE_TEXT operation because postgres
             can not selectively restore a plain text backup. Use a binary backup if you want to
@@ -56,9 +58,9 @@ class Postgres:
         self.engine = engine
         self._schemas = schemas
 
-        self.pg_bin_dpath = os.path.dirname(worek.utils.latest_version('pg_restore'))
         self.errors = []
         self.executor = subprocess.run if executor is None else executor
+        self.version = version
 
     @property
     def schemas(self):
@@ -66,6 +68,16 @@ class Postgres:
             self._schemas = self.get_non_system_schemas()
 
         return self._schemas
+
+    def _default_version(self):
+        sql = sa.select([sa.func.current_setting('server_version')])
+        result = self.engine.execute(sql).fetchone()
+
+        match = re.match(r'(\d+\.\d+)', result[0])
+        version = match.group(1)
+        if version.startswith('9'):
+            return version
+        return version.split('.')[0]
 
     @property
     def engine_can_connect(self):
@@ -124,6 +136,11 @@ class Postgres:
 
         return flags
 
+    def _pg_wrapper_cluster(self, exe_name):
+        if not is_pg_wrapper_available(exe_name) and self.version:
+            raise OSError('pg_wrapper is required if a version is specified')
+        return '{}/localhost:'.format(self.version or self._default_version())
+
     def _execute_cli_command(self, command, additional_args=None, stdin=None, stdout=None,
                              stderr=None):
         """
@@ -157,14 +174,12 @@ class Postgres:
         env = os.environ.copy()
         url = self.engine.url
 
-        cli_args = (
-            ['{}/{}'.format(self.pg_bin_dpath, command.value)]
-            + self.cli_flags_for_url(url)
-        )
+        cli_args = [command.value] + self.cli_flags_for_url(url)
 
         if command != PostgresCommand.RESTORE_TEXT:
             cli_args += ['--schema={}'.format(x) for x in self.schemas]
 
+        env['PGCLUSTER'] = self._pg_wrapper_cluster(command.value)
         if url.password:
             env['PGPASSWORD'] = url.password
 
@@ -379,3 +394,15 @@ class Postgres:
 
         command_args = ['--format', 'plain']
         return self._execute_cli_command(PostgresCommand.BACKUP, command_args, stdout=buf)
+
+
+def is_pg_wrapper_available(exe_name):
+    path = shutil.which(exe_name)
+    if path is None:
+        return False
+
+    if not os.path.islink(path):
+        return False
+    real_path = os.path.realpath(path)
+    exe_name = os.path.basename(real_path)
+    return exe_name == 'pg_wrapper'

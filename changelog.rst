@@ -1,6 +1,14 @@
 Changelog
 =========
 
+0.1.1 released 2021-02-01
+-------------------------
+
+- Allow PG client executable version to be specified (abff603_)
+
+.. _abff603: https://github.com/level12/worek/commit/abff603
+
+
 0.1.0 released 2019-04-03
 -------------------------
 

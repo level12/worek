@@ -1,11 +1,10 @@
 import sqlalchemy as sa
-import worek
 
-from worek.tests.helpers import PostgresDialectTestBase
+import worek
+from worek_tests.helpers import PostgresDialectTestBase
 
 
 class TestCorePGBackup(PostgresDialectTestBase):
-
     def test_backup_creates_full_restoreable_backup(self, tmpdir, pg_clean_engine):
         backup_file = tmpdir.join('test.backup.bin').strpath
 
@@ -18,10 +17,11 @@ class TestCorePGBackup(PostgresDialectTestBase):
 
         self.create_table(pg_clean_engine, 'should_be_removed')
 
-        with open(backup_file, 'r') as fp:
+        with open(backup_file) as fp:
             worek.restore(fp, saengine=pg_clean_engine)
 
         try:
-            pg_clean_engine.execute('SELECT * FROM should_be_removed;')
+            with pg_clean_engine.connect() as conn:
+                conn.execute(sa.text('SELECT * FROM should_be_removed;'))
         except sa.exc.ProgrammingError as e:
             assert 'relation "should_be_removed" does not exist' in str(e)

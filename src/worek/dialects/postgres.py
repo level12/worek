@@ -6,8 +6,9 @@ import re
 import shutil
 import subprocess
 
-import sqlalchemy as sa
 import psycopg2
+import sqlalchemy as sa
+from sqlalchemy import text
 
 from worek.exc import WorekException
 
@@ -70,8 +71,9 @@ class Postgres:
         return self._schemas
 
     def _default_version(self):
-        sql = sa.select([sa.func.current_setting('server_version')])
-        result = self.engine.execute(sql).fetchone()
+        sql = sa.select(sa.func.current_setting('server_version'))
+        with self.engine.connect() as conn:
+            result = conn.execute(sql).fetchone()
 
         match = re.match(r'(\d+\.\d+)', result[0])
         version = match.group(1)
@@ -82,7 +84,8 @@ class Postgres:
     @property
     def engine_can_connect(self):
         try:
-            self.engine.execute("SELECT 1")
+            with self.engine.connect() as conn:
+                conn.execute(text('SELECT 1'))
             return True
         except psycopg2.Error:
             return False
@@ -100,7 +103,7 @@ class Postgres:
         driver = params.get('driver') or 'postgresql'
 
         if 'postgresql' not in driver:
-            raise ValueError('The database driver must be for postgresql, got {}.'.format(driver))
+            raise ValueError(f'The database driver must be for postgresql, got {driver}.')
 
         user = params.get('user') or os.environ.get('PGUSER') or getpass.getuser()
         password = params.get('password') or os.environ.get('PGPASSWORD', '')
@@ -109,13 +112,7 @@ class Postgres:
         dbname = params.get('dbname') or os.environ.get('PGDATABASE', user)
 
         return sa.create_engine(
-            'postgresql://{user}:{password}@{host}:{port}/{dbname}'.format(
-                user=user,
-                password=password,
-                host=host,
-                port=port,
-                dbname=dbname
-            )
+            f'postgresql://{user}:{password}@{host}:{port}/{dbname}',
         )
 
     @classmethod
@@ -123,26 +120,32 @@ class Postgres:
         flags = []
 
         if url.username:
-            flags += ['--username={}'.format(url.username)]
+            flags += [f'--username={url.username}']
 
         if url.host:
-            flags += ['--host={}'.format(url.host)]
+            flags += [f'--host={url.host}']
 
         if url.port:
-            flags += ['--port={}'.format(url.port)]
+            flags += [f'--port={url.port}']
 
         if url.database:
-            flags += ['--dbname={}'.format(url.database)]
+            flags += [f'--dbname={url.database}']
 
         return flags
 
     def _pg_wrapper_cluster(self, exe_name):
         if not is_pg_wrapper_available(exe_name) and self.version:
             raise OSError('pg_wrapper is required if a version is specified')
-        return '{}/localhost:'.format(self.version or self._default_version())
+        return f'{self.version or self._default_version()}/localhost:'
 
-    def _execute_cli_command(self, command, additional_args=None, stdin=None, stdout=None,
-                             stderr=None):
+    def _execute_cli_command(
+        self,
+        command,
+        additional_args=None,
+        stdin=None,
+        stdout=None,
+        stderr=None,
+    ):
         """
         Execute a CLI Command putting STDOUT into output.
 
@@ -168,7 +171,7 @@ class Postgres:
 
         if not isinstance(command, PostgresCommand):
             raise NotImplementedError(
-                'Unknown postgresql command. Are you using the PostgresCommand enum.'
+                'Unknown postgresql command. Are you using the PostgresCommand enum.',
             )
 
         env = os.environ.copy()
@@ -177,7 +180,7 @@ class Postgres:
         cli_args = [command.value] + self.cli_flags_for_url(url)
 
         if command != PostgresCommand.RESTORE_TEXT:
-            cli_args += ['--schema={}'.format(x) for x in self.schemas]
+            cli_args += [f'--schema={x}' for x in self.schemas]
 
         env['PGCLUSTER'] = self._pg_wrapper_cluster(command.value)
         if url.password:
@@ -193,30 +196,32 @@ class Postgres:
         return result
 
     def drop_schema(self, schema):
-        for funcname, funcargs in self.get_function_list_from_db(schema):
-            try:
-                sql = 'DROP FUNCTION "{}"."{}" ({}) CASCADE'.format(schema, funcname, funcargs)
-                self.engine.execute(sql)
-            except Exception:
-                raise
+        with self.engine.connect() as conn:
+            for funcname, funcargs in self.get_function_list_from_db(schema):
+                try:
+                    sql = f'DROP FUNCTION "{schema}"."{funcname}" ({funcargs}) CASCADE'
+                    conn.execute(text(sql))
+                except Exception:
+                    raise
 
-        for table in self.get_table_list_from_db(schema):
-            try:
-                self.engine.execute('DROP TABLE "{}"."{}" CASCADE'.format(schema, table))
-            except Exception:
-                raise
+            for table in self.get_table_list_from_db(schema):
+                try:
+                    conn.execute(text(f'DROP TABLE "{schema}"."{table}" CASCADE'))
+                except Exception:
+                    raise
 
-        for seq in self.get_seq_list_from_db(schema):
-            try:
-                self.engine.execute('DROP SEQUENCE "{}"."{}" CASCADE'.format(schema, seq))
-            except Exception:
-                raise
+            for seq in self.get_seq_list_from_db(schema):
+                try:
+                    conn.execute(text(f'DROP SEQUENCE "{schema}"."{seq}" CASCADE'))
+                except Exception:
+                    raise
 
-        for dbtype in self.get_type_list_from_db(schema):
-            try:
-                self.engine.execute('DROP TYPE "{}"."{}" CASCADE'.format(schema, dbtype))
-            except Exception:
-                raise
+            for dbtype in self.get_type_list_from_db(schema):
+                try:
+                    conn.execute(text(f'DROP TYPE "{schema}"."{dbtype}" CASCADE'))
+                except Exception:
+                    raise
+            conn.commit()
 
     def get_function_list_from_db(self, schema):
         """Returns a list of functions not associated with an extension
@@ -225,7 +230,7 @@ class Postgres:
             related to installed extensions. Since our app users can't install extensions, we need
             to leave those function intact along with the extensions that installed them.
         """
-        sql = """
+        sql = f"""
             SELECT
                 PR.proname,
                 pg_get_function_identity_arguments(PR.oid) AS params
@@ -237,34 +242,37 @@ class Postgres:
             WHERE
                 NS.nspname = '{schema}'
                 AND D.objid IS NULL;
-        """.format(schema=schema)
+        """
 
-        return [row for row in self.engine.execute(sql)]
+        with self.engine.connect() as conn:
+            return [row for row in conn.execute(text(sql))]
 
     def get_table_list_from_db(self, schema):
         """
         Return a list of table names from the passed schema
         """
 
-        sql = """
+        sql = f"""
             SELECT table_name
             FROM information_schema.tables
             WHERE table_schema='{schema}';
-        """.format(schema=schema)
+        """
 
-        return [name for (name, ) in self.engine.execute(sql)]
+        with self.engine.connect() as conn:
+            return [name for (name,) in conn.execute(text(sql))]
 
     def get_seq_list_from_db(self, schema):
         """return a list of the sequence names from the current
-           databases public schema
+        databases public schema
         """
-        sql = """
+        sql = f"""
             SELECT sequence_name
             FROM information_schema.sequences
             WHERE sequence_schema='{schema}';
-        """.format(schema=schema)
+        """
 
-        return [name for (name, ) in self.engine.execute(sql)]
+        with self.engine.connect() as conn:
+            return [name for (name,) in conn.execute(text(sql))]
 
     def get_non_system_schemas(self):
         """
@@ -282,14 +290,13 @@ class Postgres:
             AND "schema_name" != 'information_schema';
         """
 
-        result = self.engine.execute(all_non_default_schemas_query)
-
-        return [x[0] for x in result.fetchall()]
+        with self.engine.connect() as conn:
+            result = conn.execute(text(all_non_default_schemas_query))
+            return [x[0] for x in result.fetchall()]
 
     def get_type_list_from_db(self, schema):
-        """return a list of the sequence names from the passed schema
-        """
-        sql = """
+        """return a list of the sequence names from the passed schema"""
+        sql = f"""
             SELECT t.typname as type
             FROM pg_type t
             LEFT JOIN pg_catalog.pg_namespace n
@@ -308,10 +315,11 @@ class Postgres:
                     WHERE el.oid = t.typelem
                         AND el.typarray = t.oid
                 )
-                AND n.nspname = '{}'
-        """.format(schema)
+                AND n.nspname = '{schema}'
+        """
 
-        return [name for (name, ) in self.engine.execute(sql)]
+        with self.engine.connect() as conn:
+            return [name for (name,) in conn.execute(text(sql))]
 
     def clean_existing_database(self, schemas=None):
         schemas = schemas if schemas is not None else self.schemas
@@ -329,7 +337,8 @@ class Postgres:
             raise PostgresInputError(
                 'You must use a peekable stream when trying to automatically detect the backup file'
                 ' type. If you are pipe data into worek from the CLI, you should explicitly set the'
-                ' backup file type that you are piping to the restore command.')
+                ' backup file type that you are piping to the restore command.',
+            )
 
         if header[:5] in ('PGDMP', b'PGDMP'):
             return self.restore_binary(buf, **kwargs)

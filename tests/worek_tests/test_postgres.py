@@ -5,12 +5,13 @@ from unittest import mock
 import pytest
 import sqlalchemy as sa
 
-
 from worek.dialects.postgres import (
     Postgres as PG,
+)
+from worek.dialects.postgres import (
     PostgresCommand,
 )
-from worek.tests.helpers import (
+from worek_tests.helpers import (
     MockCLIExecutor,
     PostgresDialectTestBase,
 )
@@ -23,7 +24,7 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
             password='testpassword',
             host='testhost',
             port='1111',
-            dbname='testname'
+            dbname='testname',
         )
         assert engine.url.drivername == 'postgresql'
         assert engine.url.username == 'testuser'
@@ -102,8 +103,10 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
         assert pg.get_function_list_from_db(pg_uniqueschema) == [('testfunc', 'integer')]
 
     def test_get_function_list_from_db_does_not_include_extensions(
-            self, pg_unclean_engine, pg_uniqueschema):
-
+        self,
+        pg_unclean_engine,
+        pg_uniqueschema,
+    ):
         pg = PG(pg_unclean_engine)
 
         conn = pg_unclean_engine.connect()
@@ -178,8 +181,10 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
         assert executor.captured_kwargs['env']['PGPASSWORD'] == 'password'
         assert executor.captured_kwargs['env']['PGCLUSTER'] == '10/localhost:'
 
-    @pytest.mark.skipif(not os.environ.get('PGVERSION'),
-                        reason='Must set PGVERSION to server version')
+    @pytest.mark.skipif(
+        not os.environ.get('PGVERSION'),
+        reason='Must set PGVERSION to server version',
+    )
     def test_command_uses_correct_exe_version(self, pg_unclean_engine):
         executor = MockCLIExecutor()
         expected_version = os.environ.get('PGVERSION')
@@ -187,8 +192,7 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
         # Default
         pg = PG(pg_unclean_engine, executor=executor, schemas=['public', 'other'])
         pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
-        assert executor.captured_kwargs['env']['PGCLUSTER'] == '{}/localhost:'.format(
-            expected_version)
+        assert executor.captured_kwargs['env']['PGCLUSTER'] == f'{expected_version}/localhost:'
 
         # Explicit version
         pg = PG(pg_unclean_engine, executor=executor, schemas=['public', 'other'], version='11')
@@ -228,7 +232,6 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
 
 
 class TestPostgresDialectBackup(PostgresDialectTestBase):
-
     def test_backup_creates_basic_sql_backup(self, tmpdir, pg_unclean_engine, pg_uniqueschema):
         pg = PG(pg_unclean_engine, schemas=[pg_uniqueschema])
         backup_dir = tmpdir.join('/test.backup').strpath
@@ -238,26 +241,30 @@ class TestPostgresDialectBackup(PostgresDialectTestBase):
             fp.seek(0)
             result = fp.read()
 
-        assert 'CREATE SCHEMA {};'.format(pg_uniqueschema) in result
+        assert f'CREATE SCHEMA {pg_uniqueschema};' in result
         assert 'CREATE SCHEMA public;' not in result
 
 
 class TestPostgresDialectIntegration(PostgresDialectTestBase):
-
     def test_create_and_restore_database_text_backup(self, tmpdir, pg_clean_engine):
         pg = PG(pg_clean_engine)
         backup_file = tmpdir.join('test.backup.text').strpath
 
         self.create_table(pg_clean_engine, 'testtbl')
-        pg_clean_engine.execute('INSERT INTO testtbl VALUES (1),(2),(3)')
+        with pg_clean_engine.connect() as conn:
+            conn.execute(sa.text('INSERT INTO testtbl VALUES (1),(2),(3)'))
+            conn.commit()
 
         with open(backup_file, mode='w+') as fp:
             pg.backup_text(fp)
 
-        pg_clean_engine.execute('DROP TABLE testtbl;')
+        with pg_clean_engine.connect() as conn:
+            conn.execute(sa.text('DROP TABLE testtbl;'))
+            conn.commit()
 
         try:
-            pg_clean_engine.execute('SELECT * FROM testtbl;')
+            with pg_clean_engine.connect() as conn:
+                conn.execute(sa.text('SELECT * FROM testtbl;'))
         except sa.exc.ProgrammingError as e:
             if 'relation "testtbl" does not exist' not in str(e):
                 raise
@@ -267,24 +274,30 @@ class TestPostgresDialectIntegration(PostgresDialectTestBase):
 
         assert command_result.returncode == 0
 
-        result = pg_clean_engine.execute('SELECT * FROM testtbl;')
-        assert result.rowcount == 3
-        assert set([x[0] for x in result.fetchall()]) == {1, 2, 3}
+        with pg_clean_engine.connect() as conn:
+            result = conn.execute(sa.text('SELECT * FROM testtbl;'))
+            assert result.rowcount == 3
+            assert set([x[0] for x in result.fetchall()]) == {1, 2, 3}
 
     def test_create_and_restore_database_binary_backup(self, tmpdir, pg_clean_engine):
         pg = PG(pg_clean_engine)
         backup_file = tmpdir.join('test.backup.bin').strpath
 
         self.create_table(pg_clean_engine, 'testtbl')
-        pg_clean_engine.execute('INSERT INTO testtbl VALUES (1),(2),(3)')
+        with pg_clean_engine.connect() as conn:
+            conn.execute(sa.text('INSERT INTO testtbl VALUES (1),(2),(3)'))
+            conn.commit()
 
         with open(backup_file, mode='w+') as fp:
             pg.backup_binary(fp)
 
-        pg_clean_engine.execute('DROP TABLE testtbl;')
+        with pg_clean_engine.connect() as conn:
+            conn.execute(sa.text('DROP TABLE testtbl;'))
+            conn.commit()
 
         try:
-            pg_clean_engine.execute('SELECT * FROM testtbl;')
+            with pg_clean_engine.connect() as conn:
+                conn.execute(sa.text('SELECT * FROM testtbl;'))
         except sa.exc.ProgrammingError as e:
             if 'relation "testtbl" does not exist' not in str(e):
                 raise
@@ -294,6 +307,7 @@ class TestPostgresDialectIntegration(PostgresDialectTestBase):
 
         assert command_result.returncode == 0
 
-        result = pg_clean_engine.execute('SELECT * FROM testtbl;')
-        assert result.rowcount == 3
-        assert set([x[0] for x in result.fetchall()]) == {1, 2, 3}
+        with pg_clean_engine.connect() as conn:
+            result = conn.execute(sa.text('SELECT * FROM testtbl;'))
+            assert result.rowcount == 3
+            assert set([x[0] for x in result.fetchall()]) == {1, 2, 3}

@@ -1,18 +1,21 @@
 from click.testing import CliRunner
 import sqlalchemy as sa
 
-from worek.tests.helpers import PostgresDialectTestBase
 from worek.cli import cli
+from worek_tests.helpers import PostgresDialectTestBase
 
 
 class TestCLIPGBackup(PostgresDialectTestBase):
-
     def engine_to_cli_params(self, engine):
         return [
-            '--host', engine.url.host,
-            '--user', engine.url.username,
-            '--port', engine.url.port,
-            '--dbname', engine.url.database,
+            '--host',
+            engine.url.host,
+            '--user',
+            engine.url.username,
+            '--port',
+            engine.url.port,
+            '--dbname',
+            engine.url.database,
         ]
 
     def test_cli_can_create_restoreable_backup(self, tmpdir, pg_clean_engine):
@@ -20,7 +23,8 @@ class TestCLIPGBackup(PostgresDialectTestBase):
 
         runner = CliRunner()
         result = runner.invoke(
-            cli, ['backup', '-f', backup_file] + self.engine_to_cli_params(pg_clean_engine)
+            cli,
+            ['backup', '-f', backup_file] + self.engine_to_cli_params(pg_clean_engine),
         )
 
         assert result.exit_code == 0
@@ -32,7 +36,8 @@ class TestCLIPGBackup(PostgresDialectTestBase):
 
         self.create_table(pg_clean_engine, 'manualtest')
 
-        assert pg_clean_engine.execute('SELECT * from manualtest')
+        with pg_clean_engine.connect() as conn:
+            assert conn.execute(sa.text('SELECT * from manualtest'))
 
         result = runner.invoke(
             cli,
@@ -42,6 +47,7 @@ class TestCLIPGBackup(PostgresDialectTestBase):
         assert result.exit_code == 0
 
         try:
-            assert pg_clean_engine.execute('SELECT * from manualtest')
+            with pg_clean_engine.connect() as conn:
+                assert conn.execute(sa.text('SELECT * from manualtest'))
         except sa.exc.ProgrammingError as e:
             assert 'relation "manualtest" does not exist' in str(e)

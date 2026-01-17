@@ -1,9 +1,12 @@
 import random
 import string
 
-import sqlalchemy as sa
 import pytest
+import sqlalchemy as sa
+from sqlalchemy import text
+
 from worek.dialects.postgres import Postgres as PG
+
 
 DBNAME = 'worek-tests'
 
@@ -53,33 +56,35 @@ def clean_database():
     local_conn = admin_engine.connect()
 
     # This bumps us out of a transaction because a DROP/CREATE command can't run in a transaction
-    local_conn.execute('COMMIT')
+    local_conn.execute(text('COMMIT'))
 
-    local_conn.execute('''
+    local_conn.execute(
+        text(f"""
         SELECT pg_terminate_backend(pg_stat_activity.pid)
         FROM pg_stat_activity
-        WHERE datname = '{}'
+        WHERE datname = '{DBNAME}'
         AND pid <> pg_backend_pid();
-    '''.format(DBNAME))
-    local_conn.execute('DROP DATABASE IF EXISTS "{}";'.format(DBNAME))
+    """),
+    )
+    local_conn.execute(text(f'DROP DATABASE IF EXISTS "{DBNAME}";'))
 
-    local_conn.execute('COMMIT')
-    local_conn.execute('CREATE DATABASE "{}";'.format(DBNAME))
+    local_conn.execute(text('COMMIT'))
+    local_conn.execute(text(f'CREATE DATABASE "{DBNAME}";'))
 
 
 @pytest.fixture(scope='function')
 def pg_uniqueschema(pg_unclean_engine):
-    """Create and return the name of a unique schema, which will be cleaned up after the test
-
-    """
-    schema_name = ''.join(random.sample(string.ascii_lowercase, k=20))
+    """Create and return the name of a unique schema, which will be cleaned up after the test"""
+    schema_name = ''.join(random.sample(string.ascii_lowercase, k=20))
 
     conn = pg_unclean_engine.connect()
-    conn.execute('CREATE SCHEMA {}'.format(schema_name))
+    conn.execute(text(f'CREATE SCHEMA {schema_name}'))
+    conn.commit()
     conn.close()
 
     yield schema_name
 
     conn = pg_unclean_engine.connect()
-    conn.execute('DROP SCHEMA IF EXISTS {} CASCADE'.format(schema_name))
+    conn.execute(text(f'DROP SCHEMA IF EXISTS {schema_name} CASCADE'))
+    conn.commit()
     conn.close()

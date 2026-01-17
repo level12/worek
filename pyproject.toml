@@ -7,17 +7,31 @@ build-backend = 'hatchling.build'
 
 
 [project]
-name = 'Worek'
+name = 'worek'
+description = 'Database Backup Command Line Utility'
 authors = [
     {name = 'Level 12', email = 'devteam@level12.io'},
 ]
+license = {text = 'BSD'}
 requires-python = '~=3.13.0'
 dynamic = ['version']
-readme = 'readme.md'
+readme = 'readme.rst'
+classifiers = [
+    'Development Status :: 4 - Beta',
+    'Intended Audience :: Developers',
+    'License :: OSI Approved :: BSD License',
+]
+dependencies = [
+    'sqlalchemy',
+    'click',
+    'psycopg2-binary',
+]
 
+[project.urls]
+Homepage = 'https://github.com/level12/worek'
 
 [project.scripts]
-'worek' = 'worek.cli:main'
+'worek' = 'worek.cli:cli'
 
 
 [dependency-groups]

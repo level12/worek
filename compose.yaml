@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: worek-pg
+    environment:
+      # Ok for local dev, UNSAFE in most other applications.  Don't blindly copy & paste
+      # without considering implications.
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_MULTIPLE_DATABASES: worek,worek-tests
+    ports:
+      - '${DC_LOCALHOST:-127.0.0.1}:${DC_POSTGRES_PORT:-12030}:5432'
+    volumes:
+      - ./docker/pg-init-scripts:/docker-entrypoint-initdb.d

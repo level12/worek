@@ -4,6 +4,11 @@ UV_PROJECT_ENVIRONMENT = "{{ exec(command='tasks/mise-uv-init.py proj-env', cach
 _.python.venv.path = '{{ env.UV_PROJECT_ENVIRONMENT }}'
 
 
+# Configured to connect to the database defined in compose.yaml.
+PGUSER = 'postgres'
+PGPORT = '12030'
+
+
 [tools]
 python = "{{ exec(command='tasks/mise-uv-init.py py-ver', cache_key='py-ver', cache_duration='1h') | trim }}"
 

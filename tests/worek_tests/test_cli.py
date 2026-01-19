@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from click.testing import CliRunner
 import sqlalchemy as sa
 
@@ -24,12 +26,12 @@ class TestCLIPGBackup(PostgresDialectTestBase):
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ['backup', '-f', backup_file] + self.engine_to_cli_params(pg_clean_engine),
+            ['backup', '-f', backup_file, *self.engine_to_cli_params(pg_clean_engine)],
         )
 
         assert result.exit_code == 0
 
-        with open(backup_file, 'rb') as fp:
+        with Path(backup_file).open('rb') as fp:
             assert fp.read(5) == b'PGDMP'
             data = fp.read()
             assert b'CREATE SCHEMA public' in data
@@ -41,7 +43,7 @@ class TestCLIPGBackup(PostgresDialectTestBase):
 
         result = runner.invoke(
             cli,
-            ['restore', '-f', backup_file] + self.engine_to_cli_params(pg_clean_engine),
+            ['restore', '-f', backup_file, *self.engine_to_cli_params(pg_clean_engine)],
         )
 
         assert result.exit_code == 0

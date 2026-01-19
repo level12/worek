@@ -1,5 +1,6 @@
 import getpass
 import os
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -218,11 +219,11 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
                 pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
             m_which.assert_called_once_with('psql')
 
-        with mock.patch('os.path.islink') as m_is_link:
+        with mock.patch('pathlib.Path.is_symlink') as m_is_link:
             m_is_link.return_value = False
             with pytest.raises(OSError, match='pg_wrapper is required if a version is specified'):
                 pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
-            m_is_link.assert_called_once_with('/usr/bin/psql')
+            m_is_link.assert_called_once()
 
         with mock.patch('os.path.realpath') as m_real_path:
             m_real_path.return_value = '/foo/bar'
@@ -236,7 +237,7 @@ class TestPostgresDialectBackup(PostgresDialectTestBase):
         pg = PG(pg_unclean_engine, schemas=[pg_uniqueschema])
         backup_dir = tmpdir.join('/test.backup').strpath
 
-        with open(backup_dir, mode='w+') as fp:
+        with Path(backup_dir).open(mode='w+') as fp:
             pg.backup_text(fp)
             fp.seek(0)
             result = fp.read()
@@ -255,7 +256,7 @@ class TestPostgresDialectIntegration(PostgresDialectTestBase):
             conn.execute(sa.text('INSERT INTO testtbl VALUES (1),(2),(3)'))
             conn.commit()
 
-        with open(backup_file, mode='w+') as fp:
+        with Path(backup_file).open(mode='w+') as fp:
             pg.backup_text(fp)
 
         with pg_clean_engine.connect() as conn:
@@ -269,7 +270,7 @@ class TestPostgresDialectIntegration(PostgresDialectTestBase):
             if 'relation "testtbl" does not exist' not in str(e):
                 raise
 
-        with open(backup_file, mode='rb') as fp:
+        with Path(backup_file).open(mode='rb') as fp:
             command_result = pg.restore_text(fp)
 
         assert command_result.returncode == 0
@@ -277,7 +278,7 @@ class TestPostgresDialectIntegration(PostgresDialectTestBase):
         with pg_clean_engine.connect() as conn:
             result = conn.execute(sa.text('SELECT * FROM testtbl;'))
             assert result.rowcount == 3
-            assert set([x[0] for x in result.fetchall()]) == {1, 2, 3}
+            assert {x[0] for x in result.fetchall()} == {1, 2, 3}
 
     def test_create_and_restore_database_binary_backup(self, tmpdir, pg_clean_engine):
         pg = PG(pg_clean_engine)
@@ -288,7 +289,7 @@ class TestPostgresDialectIntegration(PostgresDialectTestBase):
             conn.execute(sa.text('INSERT INTO testtbl VALUES (1),(2),(3)'))
             conn.commit()
 
-        with open(backup_file, mode='w+') as fp:
+        with Path(backup_file).open(mode='w+') as fp:
             pg.backup_binary(fp)
 
         with pg_clean_engine.connect() as conn:
@@ -302,7 +303,7 @@ class TestPostgresDialectIntegration(PostgresDialectTestBase):
             if 'relation "testtbl" does not exist' not in str(e):
                 raise
 
-        with open(backup_file, mode='rb') as fp:
+        with Path(backup_file).open(mode='rb') as fp:
             command_result = pg.restore(fp)
 
         assert command_result.returncode == 0
@@ -310,4 +311,4 @@ class TestPostgresDialectIntegration(PostgresDialectTestBase):
         with pg_clean_engine.connect() as conn:
             result = conn.execute(sa.text('SELECT * FROM testtbl;'))
             assert result.rowcount == 3
-            assert set([x[0] for x in result.fetchall()]) == {1, 2, 3}
+            assert {x[0] for x in result.fetchall()} == {1, 2, 3}

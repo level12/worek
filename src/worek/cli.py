@@ -1,4 +1,5 @@
 import click
+
 import worek.core as core
 
 
@@ -29,7 +30,7 @@ def backup(host, port, user, dbname, engine, schema, output_file, version):
             port=port,
             user=user,
             dbname=dbname,
-            version=version
+            version=version,
         )
     except core.WorekOperationException as e:
         click.echo(str(e), err=True)

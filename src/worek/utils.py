@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 
 def latest_version(executable):
@@ -44,7 +45,7 @@ def which(name, flags=os.X_OK):
         return []
 
     for p in os.environ.get('PATH', '').split(os.pathsep):
-        p = os.path.join(p, name)
+        p = str(Path(p) / name)
         if os.access(p, flags):
             result.append(p)
         for e in exts:

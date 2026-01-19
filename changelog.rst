@@ -25,4 +25,3 @@ Changelog
 .. _0697703: https://github.com/level12/worek/commit/0697703
 .. _78e6ec2: https://github.com/level12/worek/commit/78e6ec2
 .. _be27b46: https://github.com/level12/worek/commit/be27b46
-

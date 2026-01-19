@@ -2,6 +2,7 @@ import enum
 import getpass
 import logging
 import os
+from pathlib import Path
 import re
 import shutil
 import subprocess
@@ -177,7 +178,7 @@ class Postgres:
         env = os.environ.copy()
         url = self.engine.url
 
-        cli_args = [command.value] + self.cli_flags_for_url(url)
+        cli_args = [command.value, *self.cli_flags_for_url(url)]
 
         if command != PostgresCommand.RESTORE_TEXT:
             cli_args += [f'--schema={x}' for x in self.schemas]
@@ -245,7 +246,7 @@ class Postgres:
         """
 
         with self.engine.connect() as conn:
-            return [row for row in conn.execute(text(sql))]
+            return list(conn.execute(text(sql)))
 
     def get_table_list_from_db(self, schema):
         """
@@ -333,12 +334,12 @@ class Postgres:
 
         try:
             header = buf.peek(5)
-        except AttributeError:
+        except AttributeError as err:
             raise PostgresInputError(
                 'You must use a peekable stream when trying to automatically detect the backup file'
                 ' type. If you are pipe data into worek from the CLI, you should explicitly set the'
                 ' backup file type that you are piping to the restore command.',
-            )
+            ) from err
 
         if header[:5] in ('PGDMP', b'PGDMP'):
             return self.restore_binary(buf, **kwargs)
@@ -357,11 +358,10 @@ class Postgres:
             you can pass anything to `buf` that the `stdin` argument would take for that function
             (i.e. PIPE, file, DEVNULL)
         """
-        command_args = (
-            []
-            + (['--no-owner' if no_owner else ''])
-            + (['--no-privileges' if no_privileges else ''])
-        )
+        command_args = [
+            *(['--no-owner'] if no_owner else []),
+            *(['--no-privileges'] if no_privileges else []),
+        ]
         return self._execute_cli_command(PostgresCommand.RESTORE_BINARY, command_args, stdin=buf)
 
     def restore_text(self, buf, **kwargs):
@@ -410,8 +410,9 @@ def is_pg_wrapper_available(exe_name):
     if path is None:
         return False
 
-    if not os.path.islink(path):
+    path_obj = Path(path)
+    if not path_obj.is_symlink():
         return False
     real_path = os.path.realpath(path)
-    exe_name = os.path.basename(real_path)
+    exe_name = Path(real_path).name
     return exe_name == 'pg_wrapper'

@@ -78,6 +78,6 @@ def restore(restore_file, file_format=None, clean_existing_database=True, **para
         return PG.restore(restore_file)
     else:
         raise NotImplementedError(
-            'Got an unexpected file_format. {} is not a valid type, expecting'
-            ' "c", "t", or nothing.'.format(file_format)
+            f'Got an unexpected file_format. {file_format} is not a valid type, expecting'
+            ' "c", "t", or nothing.',
         )

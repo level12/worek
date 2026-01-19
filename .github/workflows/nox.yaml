@@ -33,6 +33,19 @@ jobs:
   nox-pytest:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=3s
+          --health-timeout=3s
+          --health-retries=15
+
     # Specifying the permissions block sets anything not-specified to `none` so we have have to
     # re-specify the default read permission to be able to set the write permission.
     permissions:
@@ -40,7 +53,17 @@ jobs:
       id-token: write   # For codecov OIDC
 
     steps:
+      # Install PostgreSQL 17 client tools to match the server version
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          sudo apt-get update
+          sudo apt-get -y install postgresql-client-17
+
       - uses: level12/coppy/gh-actions/nox-run@main
+        env:
+          PGUSER: postgres
         with:
           nox-session: pytest
 

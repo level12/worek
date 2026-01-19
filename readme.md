@@ -1,6 +1,6 @@
 # Worek - A Database Backup Tool
 [![nox](https://github.com/level12/worek/actions/workflows/nox.yaml/badge.svg)](https://github.com/level12/worek/actions/workflows/nox.yaml)
-[![Codecov](https://codecov.io/gh/level12/worek/branch/master/graph/badge.svg)](https://codecov.io/gh/level12/worek)
+[![Codecov](https://codecov.io/gh/level12/worek/branch/main/graph/badge.svg)](https://codecov.io/gh/level12/worek)
 
 Worek is a database backup tool.
 

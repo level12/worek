@@ -1,0 +1,6 @@
+# Git blame ignore revs file
+# This file contains commits that should be ignored by git blame
+# To use this file, run: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Formatting commit - ruff format
+7ad45e39

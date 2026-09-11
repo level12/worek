@@ -6,13 +6,14 @@ import nox
 
 package_path = Path(__file__).parent
 is_circleci = 'CIRCLECI' in environ
+python_versions = ['3.11', '3.12', '3.13', '3.14']
 
 nox.options.default_venv_backend = 'uv'
 
 
-@nox.session
+@nox.session(python=python_versions)
 def pytest(session: nox.Session):
-    uv_sync(session)
+    uv_sync(session, 'pytest')
     pytest_run(session)
 
 
@@ -97,7 +98,8 @@ def uv_sync(session: nox.Session, *groups, project=False, extra=None):
     run_args = (
         'uv',
         'sync',
-        '--active',
+        # Keep uv from replacing Nox's target-version environment with the project default.
+        f'--python={session.virtualenv.location}',
         '--frozen',
         '--exact',
         # Use --no-default-groups instead of --only-group as the latter implies
@@ -107,7 +109,7 @@ def uv_sync(session: nox.Session, *groups, project=False, extra=None):
         *group_args,
         *extra_args,
     )
-    session.run(*run_args)
+    session.run(*run_args, env={'UV_PROJECT_ENVIRONMENT': session.virtualenv.location})
 
 
 def pip_audit_ignore_args() -> list | tuple:

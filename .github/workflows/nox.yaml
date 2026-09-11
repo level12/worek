@@ -33,6 +33,11 @@ jobs:
   nox-pytest:
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13', '3.14']
+
     services:
       postgres:
         image: postgres:17-alpine
@@ -65,7 +70,7 @@ jobs:
         env:
           PGUSER: postgres
         with:
-          nox-session: pytest
+          nox-session: pytest-${{ matrix.python-version }}
 
       - uses: codecov/codecov-action@v5
         with:

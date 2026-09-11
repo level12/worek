@@ -73,18 +73,17 @@ def clean_database():
 
 
 @pytest.fixture(scope='function')
-def pg_uniqueschema(pg_unclean_engine):
+def pg_uniqueschema(pg_unclean_engine, request):
     """Create and return the name of a unique schema, which will be cleaned up after the test"""
-    schema_name = ''.join(random.sample(string.ascii_lowercase, k=20))
 
-    conn = pg_unclean_engine.connect()
-    conn.execute(text(f'CREATE SCHEMA {schema_name}'))
-    conn.commit()
-    conn.close()
+    schema_name = getattr(request, 'param', None)
+    if schema_name is None:
+        schema_name = ''.join(random.sample(string.ascii_lowercase, k=20))
+
+    with pg_unclean_engine.begin() as conn:
+        conn.execute(sa.text(f'CREATE SCHEMA {schema_name}'))
 
     yield schema_name
 
-    conn = pg_unclean_engine.connect()
-    conn.execute(text(f'DROP SCHEMA IF EXISTS {schema_name} CASCADE'))
-    conn.commit()
-    conn.close()
+    with pg_unclean_engine.begin() as conn:
+        conn.execute(sa.text(f'DROP SCHEMA IF EXISTS {schema_name} CASCADE'))

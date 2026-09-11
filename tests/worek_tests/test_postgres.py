@@ -151,6 +151,14 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
 
         assert pg.get_non_system_schemas() == ['public', pg_uniqueschema]
 
+    @pytest.mark.parametrize('pg_uniqueschema', ['pgtestschema'], indirect=True)
+    def test_includes_schema_starting_with_pg(self, pg_unclean_engine, pg_uniqueschema):
+        """Ensure our identification of system schemas looks for "pg_" and not "pg*" """
+
+        pg = PG(pg_unclean_engine)
+
+        assert pg_uniqueschema in pg.get_non_system_schemas()
+
     def test_drop_an_entire_schema(self, pg_unclean_engine, pg_uniqueschema):
         pg = PG(pg_unclean_engine)
 

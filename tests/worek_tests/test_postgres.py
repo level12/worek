@@ -83,7 +83,8 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
         self.create_table(conn, 'testtbl_other')
         self.create_table(conn, 'testtbl', schema=pg_uniqueschema)
 
-        assert pg.get_table_list_from_db(pg_uniqueschema) == ['testtbl']
+        with pg._begin():
+            assert pg.get_table_list_from_db(pg_uniqueschema) == ['testtbl']
 
     def test_get_seq_list_from_db(self, pg_unclean_engine, pg_uniqueschema):
         pg = PG(pg_unclean_engine)
@@ -92,7 +93,8 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
         self.create_sequence(conn, 'testseq_other')
         self.create_sequence(conn, 'testseq', schema=pg_uniqueschema)
 
-        assert pg.get_seq_list_from_db(pg_uniqueschema) == ['testseq']
+        with pg._begin():
+            assert pg.get_seq_list_from_db(pg_uniqueschema) == ['testseq']
 
     def test_get_function_list_from_db(self, pg_unclean_engine, pg_uniqueschema):
         pg = PG(pg_unclean_engine)
@@ -101,7 +103,8 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
         self.create_function(conn, 'testfunc_other')
         self.create_function(conn, 'testfunc', schema=pg_uniqueschema)
 
-        assert pg.get_function_list_from_db(pg_uniqueschema) == [('testfunc', 'integer')]
+        with pg._begin():
+            assert pg.get_function_list_from_db(pg_uniqueschema) == [('testfunc', 'integer')]
 
     def test_get_function_list_from_db_does_not_include_extensions(
         self,
@@ -115,7 +118,8 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
         self.create_extension(conn, 'uuid-ossp', schema=pg_uniqueschema)
         self.create_function(conn, 'testfunc', schema=pg_uniqueschema)
 
-        assert pg.get_function_list_from_db(pg_uniqueschema) == [('testfunc', 'integer')]
+        with pg._begin():
+            assert pg.get_function_list_from_db(pg_uniqueschema) == [('testfunc', 'integer')]
 
     def test_get_type_list_from_db(self, pg_unclean_engine, pg_uniqueschema):
         pg = PG(pg_unclean_engine)
@@ -124,7 +128,23 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
         self.create_type(conn, 'testtype_other')
         self.create_type(conn, 'testtype', schema=pg_uniqueschema)
 
-        assert pg.get_type_list_from_db(pg_uniqueschema) == ['testtype']
+        with pg._begin():
+            assert pg.get_type_list_from_db(pg_uniqueschema) == ['testtype']
+
+    @pytest.mark.parametrize(
+        'method_name',
+        [
+            'get_function_list_from_db',
+            'get_table_list_from_db',
+            'get_seq_list_from_db',
+            'get_type_list_from_db',
+        ],
+    )
+    def test_cleanup_catalog_reads_require_begin(self, method_name):
+        pg = PG(None)
+
+        with pytest.raises(AssertionError):
+            getattr(pg, method_name)('public')
 
     def test_get_non_system_schemas_list_from_db(self, pg_unclean_engine, pg_uniqueschema):
         pg = PG(pg_unclean_engine)
@@ -143,10 +163,25 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
         pg.drop_schema(pg_uniqueschema)
 
         assert pg.errors == []
-        assert pg.get_function_list_from_db(pg_uniqueschema) == []
-        assert pg.get_seq_list_from_db(pg_uniqueschema) == []
-        assert pg.get_table_list_from_db(pg_uniqueschema) == []
-        assert pg.get_type_list_from_db(pg_uniqueschema) == []
+        with pg._begin():
+            assert pg.get_function_list_from_db(pg_uniqueschema) == []
+            assert pg.get_seq_list_from_db(pg_uniqueschema) == []
+            assert pg.get_table_list_from_db(pg_uniqueschema) == []
+            assert pg.get_type_list_from_db(pg_uniqueschema) == []
+
+    def test_drop_table_with_owned_sequence(self, pg_unclean_engine, pg_uniqueschema):
+        pg = PG(pg_unclean_engine)
+
+        with pg_unclean_engine.begin() as conn:
+            conn.execute(
+                sa.text(f'CREATE TABLE {pg_uniqueschema}.serial_table (id SERIAL PRIMARY KEY)'),
+            )
+
+        pg.drop_schema(pg_uniqueschema)
+
+        with pg._begin():
+            assert pg.get_table_list_from_db(pg_uniqueschema) == []
+            assert pg.get_seq_list_from_db(pg_uniqueschema) == []
 
     def test_url_translation_to_cli_commands_with_schemas(self):
         executor = MockCLIExecutor()

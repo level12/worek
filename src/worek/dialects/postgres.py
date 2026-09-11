@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import enum
 import getpass
 import logging
@@ -59,10 +60,22 @@ class Postgres:
         """
         self.engine = engine
         self._schemas = schemas
+        self._conn = None
 
         self.errors = []
         self.executor = subprocess.run if executor is None else executor
         self.version = version
+
+    @contextmanager
+    def _begin(self):
+        assert self._conn is None
+
+        with self.engine.begin() as conn:
+            self._conn = conn
+            try:
+                yield
+            finally:
+                self._conn = None
 
     @property
     def schemas(self):
@@ -197,32 +210,19 @@ class Postgres:
         return result
 
     def drop_schema(self, schema):
-        with self.engine.connect() as conn:
+        with self._begin():
             for funcname, funcargs in self.get_function_list_from_db(schema):
-                try:
-                    sql = f'DROP FUNCTION "{schema}"."{funcname}" ({funcargs}) CASCADE'
-                    conn.execute(text(sql))
-                except Exception:
-                    raise
+                sql = f'DROP FUNCTION IF EXISTS "{schema}"."{funcname}" ({funcargs}) CASCADE'
+                self._conn.execute(text(sql))
 
             for table in self.get_table_list_from_db(schema):
-                try:
-                    conn.execute(text(f'DROP TABLE "{schema}"."{table}" CASCADE'))
-                except Exception:
-                    raise
+                self._conn.execute(text(f'DROP TABLE IF EXISTS "{schema}"."{table}" CASCADE'))
 
             for seq in self.get_seq_list_from_db(schema):
-                try:
-                    conn.execute(text(f'DROP SEQUENCE "{schema}"."{seq}" CASCADE'))
-                except Exception:
-                    raise
+                self._conn.execute(text(f'DROP SEQUENCE IF EXISTS "{schema}"."{seq}" CASCADE'))
 
             for dbtype in self.get_type_list_from_db(schema):
-                try:
-                    conn.execute(text(f'DROP TYPE "{schema}"."{dbtype}" CASCADE'))
-                except Exception:
-                    raise
-            conn.commit()
+                self._conn.execute(text(f'DROP TYPE IF EXISTS "{schema}"."{dbtype}" CASCADE'))
 
     def get_function_list_from_db(self, schema):
         """Returns a list of functions not associated with an extension
@@ -231,6 +231,8 @@ class Postgres:
             related to installed extensions. Since our app users can't install extensions, we need
             to leave those function intact along with the extensions that installed them.
         """
+        assert self._conn is not None
+
         sql = f"""
             SELECT
                 PR.proname,
@@ -245,13 +247,13 @@ class Postgres:
                 AND D.objid IS NULL;
         """
 
-        with self.engine.connect() as conn:
-            return list(conn.execute(text(sql)))
+        return list(self._conn.execute(text(sql)))
 
     def get_table_list_from_db(self, schema):
         """
         Return a list of table names from the passed schema
         """
+        assert self._conn is not None
 
         sql = f"""
             SELECT table_name
@@ -259,21 +261,21 @@ class Postgres:
             WHERE table_schema='{schema}';
         """
 
-        with self.engine.connect() as conn:
-            return [name for (name,) in conn.execute(text(sql))]
+        return [name for (name,) in self._conn.execute(text(sql))]
 
     def get_seq_list_from_db(self, schema):
         """return a list of the sequence names from the current
         databases public schema
         """
+        assert self._conn is not None
+
         sql = f"""
             SELECT sequence_name
             FROM information_schema.sequences
             WHERE sequence_schema='{schema}';
         """
 
-        with self.engine.connect() as conn:
-            return [name for (name,) in conn.execute(text(sql))]
+        return [name for (name,) in self._conn.execute(text(sql))]
 
     def get_non_system_schemas(self):
         """
@@ -297,6 +299,8 @@ class Postgres:
 
     def get_type_list_from_db(self, schema):
         """return a list of the sequence names from the passed schema"""
+        assert self._conn is not None
+
         sql = f"""
             SELECT t.typname as type
             FROM pg_type t
@@ -319,8 +323,7 @@ class Postgres:
                 AND n.nspname = '{schema}'
         """
 
-        with self.engine.connect() as conn:
-            return [name for (name,) in conn.execute(text(sql))]
+        return [name for (name,) in self._conn.execute(text(sql))]
 
     def clean_existing_database(self, schemas=None):
         schemas = schemas if schemas is not None else self.schemas

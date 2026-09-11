@@ -1,7 +1,6 @@
 [build-system]
 requires = [
     'hatchling',
-    'hatch-regex-commit',
 ]
 build-backend = 'hatchling.build'
 
@@ -13,7 +12,7 @@ authors = [
     {name = 'Level 12', email = 'devteam@level12.io'},
 ]
 license = {text = 'BSD'}
-requires-python = '~=3.13.0'
+requires-python = '>=3.11'
 dynamic = ['version']
 readme = 'readme.md'
 classifiers = [
@@ -37,11 +36,10 @@ Homepage = 'https://github.com/level12/worek'
 [dependency-groups]
 dev = [
     {include-group = "pytest"},
-    {include-group = "pre-commit"},
+    {include-group = "prek"},
     {include-group = "audit"},
     {include-group = "nox"},
     'click',
-    'hatch',
     'ruff',
 ]
 # Used by nox
@@ -50,9 +48,8 @@ pytest = [
     'pytest-cov',
 ]
 # Used by nox
-pre-commit = [
-    'pre-commit',
-    'pre-commit-uv',
+prek = [
+    'prek',
 ]
 # Used by nox
 audit = [

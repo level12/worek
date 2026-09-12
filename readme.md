@@ -2,6 +2,7 @@
 
 [![nox](https://github.com/level12/worek/actions/workflows/nox.yaml/badge.svg)](https://github.com/level12/worek/actions/workflows/nox.yaml)
 [![Codecov](https://codecov.io/gh/level12/worek/branch/main/graph/badge.svg)](https://codecov.io/gh/level12/worek)
+[![PyPI](https://img.shields.io/pypi/v/worek)](https://pypi.org/project/worek/)
 
 Worek is a database backup tool.
 

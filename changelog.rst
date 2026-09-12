@@ -1,14 +1,15 @@
 Changelog
 =========
 
-2.0.0 released 2026-09-12
--------------------------
+v0.20260912.1
+-------------
 
 - Require Python 3.11+ and support Python 3.11 through 3.14 (78a39d0_)
 - Restore SQLAlchemy 2 compatibility and reliable cascading schema cleanup (e787768_)
 - Correctly identify PostgreSQL system schemas by the literal ``pg_`` prefix (564b2a2_)
 - Modernize packaging and development tooling with Coppy, Hatch, uv, and Nox (dcd86c8_)
 - Add automated PyPI publishing with trusted publishing (2e477c5_)
+- Move to date based versions
 
 .. _78a39d0: https://github.com/level12/worek/commit/78a39d0
 .. _e787768: https://github.com/level12/worek/commit/e787768

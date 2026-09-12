@@ -131,9 +131,11 @@ def bump_cli(
         return
 
     if push:
+        # Ensure CI has passed for what we will be tagging and publishing.
         sub_run(RELEASE_WAIT_FPATH)
 
     version.save(next_ver, sign=sign)
+
     if push:
         sub_run('git', 'push', '--atomic', '--follow-tags')
 

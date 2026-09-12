@@ -1,6 +1,15 @@
 Changelog
 =========
 
+v0.20260912.2
+-------------
+
+- Require successful Nox CI before publishing while avoiding duplicate CI for version-only
+  release commits (561c93a_)
+
+.. _561c93a: https://github.com/level12/worek/commit/561c93a
+
+
 v0.20260912.1
 -------------
 

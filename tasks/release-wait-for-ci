@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+# [MISE] hide=true
+# [MISE] description="Wait for release CI"
+
+from os import environ
+from pathlib import Path
+import sys
+import time
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / 'src'))
+
+from worek_tasks_lib import sub_run  # noqa: E402
+
+
+BRANCH = 'main'
+VERSION_FPATH = Path('src/worek/version.py')
+WORKFLOW = 'nox.yaml'
+WAIT_SECONDS = 10
+RUN_DISCOVERY_TIMEOUT = 300
+RUN_COMPLETION_TIMEOUT = 3600
+
+
+class ReleaseError(Exception):
+    """Report an unmet release requirement."""
+
+
+def tested_commit() -> str:
+    """Return the commit whose Nox run must have passed."""
+    revision = 'HEAD'
+    if environ.get('GITHUB_REF_TYPE') == 'tag':
+        changed_files = (
+            sub_run(
+                'git',
+                'diff-tree',
+                '--no-commit-id',
+                '--name-only',
+                '-r',
+                'HEAD',
+                capture=True,
+            )
+            .stdout.strip()
+            .splitlines()
+        )
+        if changed_files != [str(VERSION_FPATH)]:
+            changed = '\n'.join(changed_files) or '(none)'
+            raise ReleaseError(
+                f'the tagged commit must change only {VERSION_FPATH}; changed files:\n{changed}',
+            )
+
+        # The version-only commit deliberately does not run CI. Verify its parent instead.
+        revision = 'HEAD^'
+    elif sub_run('git', 'branch', '--show-current', capture=True).stdout.strip() != BRANCH:
+        raise ReleaseError(f'version bumps must be made from the {BRANCH} branch')
+
+    return sub_run('git', 'rev-parse', f'{revision}^{{commit}}', capture=True).stdout.strip()
+
+
+def repository() -> str:
+    """Return the GitHub repository in owner/name form."""
+    return (
+        environ.get('GITHUB_REPOSITORY')
+        or sub_run(
+            'gh',
+            'repo',
+            'view',
+            '--json',
+            'nameWithOwner',
+            '--jq',
+            '.nameWithOwner',
+            capture=True,
+        ).stdout.strip()
+    )
+
+
+def verify_remote_head(repo: str, commit: str) -> None:
+    """Require a local release to start at GitHub's main HEAD."""
+    if environ.get('GITHUB_REF_TYPE') == 'tag':
+        return
+
+    remote_main = sub_run(
+        'gh',
+        'api',
+        f'repos/{repo}/git/ref/heads/{BRANCH}',
+        '--jq',
+        '.object.sha',
+        capture=True,
+    ).stdout.strip()
+    if commit != remote_main:
+        raise ReleaseError(
+            f"local {BRANCH} HEAD ({commit}) is not GitHub's {BRANCH} HEAD ({remote_main})",
+        )
+
+
+def find_run(repo: str, commit: str) -> str:
+    """Wait for and return the matching Nox workflow run ID."""
+    deadline = time.monotonic() + RUN_DISCOVERY_TIMEOUT
+    while True:
+        run_id = sub_run(
+            'gh',
+            'run',
+            'list',
+            '--repo',
+            repo,
+            '--workflow',
+            WORKFLOW,
+            '--branch',
+            BRANCH,
+            '--commit',
+            commit,
+            '--event',
+            'push',
+            '--limit',
+            '1',
+            '--json',
+            'databaseId',
+            '--jq',
+            '.[0].databaseId // empty',
+            capture=True,
+        ).stdout.strip()
+        if run_id:
+            return run_id
+        if time.monotonic() >= deadline:
+            raise ReleaseError(
+                f'no {WORKFLOW} push run appeared within {RUN_DISCOVERY_TIMEOUT}s',
+            )
+
+        time.sleep(WAIT_SECONDS)
+
+
+def wait_for_run(repo: str, run_id: str) -> None:
+    """Wait for a workflow run and require it to succeed."""
+    deadline = time.monotonic() + RUN_COMPLETION_TIMEOUT
+    while True:
+        run_state = sub_run(
+            'gh',
+            'run',
+            'view',
+            run_id,
+            '--repo',
+            repo,
+            '--json',
+            'status,conclusion,url',
+            '--jq',
+            '[.status, (.conclusion // ""), .url] | @tsv',
+            capture=True,
+        ).stdout.strip()
+        status, conclusion, run_url = run_state.split('\t', maxsplit=2)
+        if status == 'completed':
+            if conclusion == 'success':
+                print(f'CI passed: {run_url}')
+                return
+            raise ReleaseError(f'CI concluded with {conclusion}: {run_url}')
+        if time.monotonic() >= deadline:
+            raise ReleaseError(f'CI did not complete within {RUN_COMPLETION_TIMEOUT}s: {run_url}')
+
+        print(f'CI is {status}; checking again in {WAIT_SECONDS}s: {run_url}')
+        time.sleep(WAIT_SECONDS)
+
+
+def main() -> int:
+    """Check the release's existing CI run."""
+    try:
+        commit = tested_commit()
+        repo = repository()
+        verify_remote_head(repo, commit)
+        print(f'Waiting for {WORKFLOW} to pass for {repo}@{commit}')
+        wait_for_run(repo, find_run(repo, commit))
+    except (ReleaseError, ValueError) as e:
+        print(f'release-wait-for-ci: {e}', file=sys.stderr)
+        return 1
+
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

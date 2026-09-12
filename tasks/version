@@ -16,6 +16,7 @@ from worek_tasks_lib import sub_run
 
 
 VERSION_FPATH = Path(__file__).resolve().parents[1] / 'src' / 'worek' / 'version.py'
+RELEASE_WAIT_FPATH = Path(__file__).with_name('release-wait-for-ci')
 VERSION_RE = re.compile(r"^VERSION = '(?P<version>[^']+)'$", re.MULTILINE)
 
 
@@ -87,7 +88,7 @@ def show() -> None:
     help='Sign the release tag.',
     show_default=True,
 )
-@click.option('--push/--no-push', help='Push after bump', default=True)
+@click.option('--push/--no-push', help='Wait for CI and push after bump', default=True)
 @click.pass_context
 def bump_cli(
     ctx: click.Context,
@@ -129,9 +130,12 @@ def bump_cli(
         click.echo(f'Next: {next_ver}')
         return
 
+    if push:
+        sub_run(RELEASE_WAIT_FPATH)
+
     version.save(next_ver, sign=sign)
     if push:
-        sub_run('git', 'push', '--follow-tags')
+        sub_run('git', 'push', '--atomic', '--follow-tags')
 
 
 if __name__ == '__main__':

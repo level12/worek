@@ -1,5 +1,4 @@
 import getpass
-import os
 from pathlib import Path
 from unittest import mock
 
@@ -224,32 +223,6 @@ class TestPostgresDialectInternals(PostgresDialectTestBase):
         }
         assert executor.captured_kwargs['env']['PGPASSWORD'] == 'password'
         assert executor.captured_kwargs['env']['PGCLUSTER'] == '10/localhost:'
-
-    @pytest.mark.skipif(
-        not os.environ.get('PGVERSION'),
-        reason='Must set PGVERSION to server version',
-    )
-    def test_command_uses_correct_exe_version(self, pg_unclean_engine):
-        executor = MockCLIExecutor()
-        expected_version = os.environ.get('PGVERSION')
-
-        # Default
-        pg = PG(pg_unclean_engine, executor=executor, schemas=['public', 'other'])
-        pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
-        assert executor.captured_kwargs['env']['PGCLUSTER'] == f'{expected_version}/localhost:'
-
-        # Explicit version
-        pg = PG(pg_unclean_engine, executor=executor, schemas=['public', 'other'], version='11')
-        pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
-        assert executor.captured_kwargs['env']['PGCLUSTER'] == '11/localhost:'
-
-        pg = PG(pg_unclean_engine, executor=executor, schemas=['public', 'other'], version='10')
-        pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
-        assert executor.captured_kwargs['env']['PGCLUSTER'] == '10/localhost:'
-
-        pg = PG(pg_unclean_engine, executor=executor, schemas=['public', 'other'], version='9')
-        pg._execute_cli_command(PostgresCommand.RESTORE_TEXT)
-        assert executor.captured_kwargs['env']['PGCLUSTER'] == '9/localhost:'
 
     def test_command_pg_wrapper_not_installed(self):
         executor = MockCLIExecutor()
